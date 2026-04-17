@@ -1,0 +1,84 @@
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <omp.h>
+#include <sstream>
+
+using namespace std;
+using namespace chrono;
+
+string int_to_string(long long val) {
+    ostringstream oss;
+    oss << val;
+    return oss.str();
+}
+
+string double_to_string(double val) {
+    ostringstream oss;
+    oss.precision(4);
+    oss << fixed << val;
+    return oss.str();
+}
+
+long long compute_sequential(const vector<int>& arr) {
+    long long sum = 0;
+    for (size_t i = 0; i < arr.size(); ++i) {
+        sum += arr[i];
+    }
+    return sum;
+}
+
+long long compute_parallel(const vector<int>& arr) {
+    long long sum = 0;
+    int n = static_cast<int>(arr.size());
+#pragma omp parallel for reduction(+:sum)
+    for (int i = 0; i < n; ++i) {
+        sum += arr[i];
+    }
+    return sum;
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+    
+    const size_t ARRAY_SIZE = 10000000;
+    const int NUM_THREADS = 4;
+    
+    omp_set_num_threads(NUM_THREADS);
+    omp_set_dynamic(0);
+    
+    vector<int> data(ARRAY_SIZE);
+    for (size_t i = 0; i < ARRAY_SIZE; ++i) {
+        data[i] = static_cast<int>(i % 100 + 1);
+    }
+    
+    cout << "Последовательная версия " << endl;
+    auto start_seq = high_resolution_clock::now();
+    long long sum_seq = compute_sequential(data);
+    auto end_seq = high_resolution_clock::now();
+    double time_seq = duration_cast<microseconds>(end_seq - start_seq).count() / 1000.0;
+    
+    cout << "Сумма: " << int_to_string(sum_seq) << endl;
+    cout << "Время: " << double_to_string(time_seq) << " мс" << endl << endl;
+    
+    cout << "Параллельная версия (OpenMP, " << NUM_THREADS << " потоков) " << endl;
+    auto start_par = high_resolution_clock::now();
+    long long sum_par = compute_parallel(data);
+    auto end_par = high_resolution_clock::now();
+    double time_par = duration_cast<microseconds>(end_par - start_par).count() / 1000.0;
+    
+    cout << "Сумма: " << int_to_string(sum_par) << endl;
+    cout << "Время: " << double_to_string(time_par) << " мс" << endl << endl;
+    
+    cout << "Сравнение " << endl;
+    cout << "Совпадение результатов: " << (sum_seq == sum_par ? "Да" : "Нет") << endl;
+    if (time_par > 0) {
+        double speedup = time_seq / time_par;
+        cout << "Ускорение: " << double_to_string(speedup) << "x" << endl;
+    }
+    cout << "  " << endl;
+    cout << "  " << endl;
+    cout << "Надеюсь, у вас хорошее настроение, и вы не устали проверять лабы)) " << endl;
+    
+    return 0;
+}
