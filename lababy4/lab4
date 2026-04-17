@@ -1,0 +1,109 @@
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <vector>
+#include <functional>
+#include <future>
+#include <chrono>
+#include <sstream>
+
+using namespace std;
+
+string int_to_string(int val) {
+    ostringstream oss;
+    oss << val;
+    return oss.str();
+}
+
+class ThreadPool {
+public:
+    ThreadPool(size_t num_threads) : stop(false) {
+        for (size_t i = 0; i < num_threads; ++i) {
+            workers.emplace_back([this] {
+                while (true) {
+                    function<void()> task;
+                    {
+                        unique_lock<mutex> lock(queue_mutex);
+                        condition.wait(lock, [this] {
+                            return stop || !tasks.empty();
+                            });
+                        if (stop && tasks.empty()) {
+                            return;
+                        }
+                        task = move(tasks.front());
+                        tasks.pop();
+                    }
+                    task();
+                }
+                });
+        }
+    }
+
+    template<class F, class... Args>
+    auto enqueue(F&& f, Args&&... args) -> future<decltype(f(args...))> {
+        using return_type = decltype(f(args...));
+
+        auto task = make_shared<packaged_task<return_type()>>(
+            bind(forward<F>(f), forward<Args>(args)...)
+            );
+
+        future<return_type> res = task->get_future();
+        {
+            unique_lock<mutex> lock(queue_mutex);
+            tasks.emplace([task]() { (*task)(); });
+        }
+        condition.notify_one();
+        return res;
+    }
+
+    ~ThreadPool() {
+        {
+            unique_lock<mutex> lock(queue_mutex);
+            stop = true;
+        }
+        condition.notify_all();
+        for (thread& worker : workers) {
+            worker.join();
+        }
+    }
+
+private:
+    vector<thread> workers;
+    queue<function<void()>> tasks;
+    mutex queue_mutex;
+    condition_variable condition;
+    bool stop;
+};
+
+long long compute_factorial(int n) {
+    this_thread::sleep_for(chrono::milliseconds(150));
+    long long result = 1;
+    for (int i = 2; i <= n; ++i) {
+        result *= i;
+    }
+    return result;
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    const int THREAD_COUNT = 4;
+    const int TASK_COUNT = 20;
+
+    ThreadPool pool(THREAD_COUNT);
+
+    vector<future<long long>> results;
+
+    for (int i = 1; i <= TASK_COUNT; ++i) {
+        results.push_back(pool.enqueue(compute_factorial, i));
+    }
+
+    for (int i = 0; i < TASK_COUNT; ++i) {
+        long long value = results[i].get();
+        cout << "Задачка" << int_to_string(i + 1) << ": " << int_to_string(i + 1) << "! = " << int_to_string(value) << endl;
+    }
+
+    return 0;
+}
