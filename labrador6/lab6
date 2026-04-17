@@ -1,0 +1,110 @@
+#include <iostream>
+#include <complex>
+#include <opencv2/opencv.hpp>
+#include <omp.h>
+
+using namespace std;
+using namespace cv;
+
+const int width = 1000;
+const int height = 1000;
+const int max_iter = 1000;
+const double x_min = -2.5, x_max = 1.0;
+const double y_min = -1.5, y_max = 1.5;
+
+void compute_sequential(cv::Mat& img) {
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            double real = x_min + (double)x / width * (x_max - x_min);
+            double imag = y_min + (double)y / height * (y_max - y_min);
+            complex<double> c(real, imag);
+            complex<double> z(0, 0);
+
+            int iter = 0;
+            while (abs(z) < 2.0 && iter < max_iter) {
+                z = z * z + c;
+                iter++;
+            }
+
+            if (iter == max_iter) {
+                img.at<Vec3b>(y, x) = Vec3b(0, 0, 0);
+            }
+            else {
+                int color = (iter * 255) / max_iter;
+                img.at<Vec3b>(y, x) = Vec3b(
+                    (color * 3) % 256,
+                    (color * 5) % 256,
+                    (color * 7) % 256
+                );
+            }
+        }
+    }
+}
+
+void compute_parallel(cv::Mat& img) {
+#pragma omp parallel for
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            double real = x_min + (double)x / width * (x_max - x_min);
+            double imag = y_min + (double)y / height * (y_max - y_min);
+            complex<double> c(real, imag);
+            complex<double> z(0, 0);
+
+            int iter = 0;
+            while (abs(z) < 2.0 && iter < max_iter) {
+                z = z * z + c;
+                iter++;
+            }
+
+            if (iter == max_iter) {
+                img.at<Vec3b>(y, x) = Vec3b(0, 0, 0);
+            }
+            else {
+                int color = (iter * 255) / max_iter;
+                img.at<Vec3b>(y, x) = Vec3b(
+                    (color * 3) % 256,
+                    (color * 5) % 256,
+                    (color * 7) % 256
+                );
+            }
+        }
+    }
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    cout << "Размер изображения: " << width << "x" << height << endl;
+    cout << "Максимум итераций: " << max_iter << endl << endl;
+
+    cv::Mat seq_img(height, width, CV_8UC3, Scalar(0, 0, 0));
+    cv::Mat par_img(height, width, CV_8UC3, Scalar(0, 0, 0));
+
+    cout << "Последовательная версия" << endl;
+    double start_seq = omp_get_wtime();
+    compute_sequential(seq_img);
+    double end_seq = omp_get_wtime();
+    double time_seq = end_seq - start_seq;
+    cout << "Время: " << time_seq << " сек" << endl << endl;
+
+    cout << "Параллельная версия (OpenMP parallel for)" << endl;
+    double start_par = omp_get_wtime();
+    compute_parallel(par_img);
+    double end_par = omp_get_wtime();
+    double time_par = end_par - start_par;
+    cout << "Время: " << time_par << " сек" << endl << endl;
+
+    cout << "Сравнение" << endl;
+    cout << "Последовательно: " << time_seq << " сек" << endl;
+    cout << "Параллельно: " << time_par << " сек" << endl;
+    if (time_par > 0) {
+        cout << "Ускорение: " << time_seq / time_par << "x" << endl;
+    }
+    cout << "Потоков: " << omp_get_max_threads() << endl << endl;
+
+    imshow("Множество Мандельброта", par_img);
+    cout << "Нажмите любую клавишу для выхода..." << endl;
+    waitKey(0);
+
+    return 0;
+}
