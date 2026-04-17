@@ -1,0 +1,76 @@
+#include <iostream>
+#include <future>
+#include <thread>
+#include <vector>
+#include <chrono>
+#include <atomic>
+#include <sstream>
+
+using namespace std;
+
+string int_to_string(int val) {
+    ostringstream oss;
+    oss << val;
+    return oss.str();
+}
+
+long long compute_task(int n) {
+    this_thread::sleep_for(chrono::milliseconds(200));
+    long long result = 1;
+    for (int i = 2; i <= n; ++i) {
+        result *= i;
+    }
+    return result;
+}
+
+void worker(int task_id, packaged_task<long long(int)> task, atomic<int>& completed) {
+    task(task_id);
+    completed.fetch_add(1, memory_order_relaxed);
+}
+
+void monitor(vector<thread>& workers, atomic<int>& completed, int total, promise<void>&& done_signal) {
+    while (completed.load(memory_order_relaxed) < total) {
+        this_thread::sleep_for(chrono::milliseconds(100));
+    }
+    done_signal.set_value();
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    const int TASK_COUNT = 5;
+    vector<future<long long>> futures;
+    vector<thread> workers;
+    atomic<int> completed{ 0 };
+
+    cout << "=== Запуск " << TASK_COUNT << " задач ===" << endl;
+
+    promise<void> completion_promise;
+    future<void> completion_future = completion_promise.get_future();
+
+    for (int i = 1; i <= TASK_COUNT; ++i) {
+        packaged_task<long long(int)> task(compute_task);
+        futures.push_back(task.get_future());
+        workers.emplace_back(worker, i, move(task), ref(completed));
+    }
+
+    thread monitor_thread(monitor, ref(workers), ref(completed), TASK_COUNT, move(completion_promise));
+
+    cout << "[Main] Ожидание результатов..." << endl;
+
+    for (int i = 0; i < TASK_COUNT; ++i) {
+        long long result = futures[i].get();
+        cout << "Задача #" << int_to_string(i + 1) << ": результат = " << int_to_string(result) << endl;
+    }
+
+    cout << "[Main] Ожидание сигнала от монитора..." << endl;
+    completion_future.wait();
+    cout << "[Main] Все задачи завершены!" << endl;
+
+    monitor_thread.join();
+    for (auto& t : workers) {
+        t.join();
+    }
+
+    return 0;
+}
