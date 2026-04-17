@@ -1,0 +1,101 @@
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <vector>
+#include <chrono>
+#include <string>
+#include <sstream>
+
+using namespace std;
+
+queue<int> task_queue;
+mutex queue_mutex;
+recursive_mutex log_mutex;
+condition_variable cv;
+bool production_done = false;
+
+string int_to_string(int val) {
+    ostringstream oss;
+    oss << val;
+    return oss.str();
+}
+
+void log_msg(const string& msg) {
+    lock_guard<recursive_mutex> lock(log_mutex);
+    cout << msg << endl;
+}
+
+void log_nested(const string& prefix, const string& msg) {
+    unique_lock<recursive_mutex> lock(log_mutex);
+    log_msg(prefix + ": " + msg);
+}
+
+thread_local int local_processed = 0;
+
+void producer(int max_tasks) {
+    for (int i = 1; i <= max_tasks; ++i) {
+        unique_lock<mutex> lock(queue_mutex);
+        cv.wait(lock, [] { return task_queue.size() < 10; });
+        task_queue.push(i);
+        log_nested("Producer", "Added #" + int_to_string(i));
+        lock.unlock();
+        cv.notify_one();
+        this_thread::sleep_for(chrono::milliseconds(50));
+    }
+    {
+        unique_lock<mutex> lock(queue_mutex);
+        production_done = true;
+    }
+    cv.notify_all();
+}
+
+void consumer(int id) {
+    while (true) {
+        unique_lock<mutex> lock(queue_mutex);
+        cv.wait(lock, [] { return !task_queue.empty() || production_done; });
+
+        if (task_queue.empty() && production_done) break;
+
+        if (!task_queue.empty()) {
+            int value = task_queue.front();
+            task_queue.pop();
+            int result = value * value;
+            ++local_processed;
+
+            string msg = "#" + int_to_string(value) + " -> " + int_to_string(result);
+            log_nested("Consumer " + int_to_string(id), msg);
+
+            lock.unlock();
+            cv.notify_one();
+            this_thread::sleep_for(chrono::milliseconds(80));
+        }
+    }
+
+    ostringstream oss;
+    oss << "Consumer " << id << " [thread " << this_thread::get_id() << "] done: " << local_processed << " tasks";
+    log_msg(oss.str());
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    const int TASK_COUNT = 20;
+    const int CONSUMER_COUNT = 3;
+
+    vector<thread> consumers;
+
+    thread prod(producer, TASK_COUNT);
+
+    for (int i = 0; i < CONSUMER_COUNT; ++i) {
+        consumers.emplace_back(consumer, i + 1);
+    }
+
+    prod.join();
+    for (auto& c : consumers) {
+        c.join();
+    }
+
+    return 0;
+}
