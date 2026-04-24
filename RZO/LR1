@@ -1,0 +1,56 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+int main()
+{
+    setlocale(LC_ALL, "Rus");
+
+    const std::string imagePath = "D:/Users/User/Downloads/cat.jpg";
+
+    cv::Mat original = cv::imread(imagePath);
+
+    if (original.empty()) {
+        std::cout << "Error!" << std::endl;
+        return -1;
+    }
+
+    std::cout << "OK. Got it!. Size: " << original.cols << "x" << original.rows << std::endl;
+
+   
+    cv::imshow("0. Original", original);
+
+    
+    cv::Mat gray;
+    cv::cvtColor(original, gray, cv::COLOR_BGR2GRAY);
+    cv::imshow("1. Grey", gray);
+
+    
+    cv::Mat blurred;
+    cv::GaussianBlur(original, blurred, cv::Size(15, 15), 0);
+    cv::imshow("2. Blurred", blurred);
+
+    
+    cv::Mat small;
+    cv::resize(original, small, cv::Size(), 0.5, 0.5);
+    cv::imshow("3. Small", small);
+
+    
+    cv::Mat rotated;
+    cv::Point2f center(original.cols / 2.0f, original.rows / 2.0f);
+    cv::Mat rotation_matrix = cv::getRotationMatrix2D(center, 45, 1.0);
+    cv::warpAffine("4. Rotated", rotated);
+
+    
+    cv::Mat lines;
+    cv::Canny(original, lines, 50, 150);
+    cv::Mat linesColored;
+    cv::cvtColor(lines, linesColored, cv::COLOR_GRAY2BGR);
+    cv::imshow("5. Controur", linesColored);
+
+    std::cout << "Enter..." << std::endl;
+    cv::waitKey(0);
+
+    cv::destroyAllWindows();
+
+    return 0;
+}
