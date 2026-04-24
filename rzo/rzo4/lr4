@@ -1,0 +1,97 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <vector>
+#include <string>
+
+std::string getShapeName(int vertices, double circularity)
+{
+    switch (vertices)
+    {
+    case 3: return "Triangle";
+    case 4: return "Rectangle";
+    case 5: return "Pentagon";
+    case 6: return "Hexagon";
+    default:
+        if (circularity > 0.75) return "Circle";
+        else return "Unknown";
+    }
+}
+
+int main()
+{
+    setlocale(LC_ALL, "Russian");
+
+    std::string imagePath = "figs.jpg"; 
+    cv::Mat img = cv::imread(imagePath);
+
+    if (img.empty())
+    {
+        std::cout << "Не удалось загрузить изображение!" << std::endl;
+        return -1;
+    }
+
+    cv::Mat gray, edges;
+    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0);
+    cv::Canny(gray, edges, 50, 150);
+
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+    cv::morphologyEx(edges, edges, cv::MORPH_CLOSE, kernel);
+
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+    cv::Mat result = img.clone();
+
+    for (const auto& contour : contours)
+    {
+        double area = cv::contourArea(contour);
+        if (area < 500) continue;
+
+        // Периметр контура
+        double perimeter = cv::arcLength(contour, true);
+
+        // Аппроксимация контура
+        std::vector<cv::Point> approx;
+        cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+        // Вычисляем округлость
+        double circularity = 4 * CV_PI * area / (perimeter * perimeter);
+
+        // Определяем форму
+        std::string shape = getShapeName(approx.size(), circularity);
+
+        // Центр масс через моменты
+        cv::Moments m = cv::moments(contour);
+        if (m.m00 != 0)
+        {
+            cv::Point2f center(m.m10 / m.m00, m.m01 / m.m00);
+
+            // Выделяем контур зеленым цветом
+            cv::drawContours(result, std::vector<std::vector<cv::Point>>{contour},
+                -1, cv::Scalar(0, 255, 0), 2);
+
+            // Отмечаем центр масс красной точкой
+            cv::circle(result, center, 5, cv::Scalar(0, 0, 255), -1);
+
+            // Подпись: название + периметр (ФИОЛЕТОВЫЙ шрифт)
+            std::string text = shape + " P:" + std::to_string((int)perimeter);
+
+            cv::putText(result, text,
+                cv::Point(center.x - 50, center.y - 10),
+                cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 0, 255), 2);  // 255,0,255 = фиолетовый
+
+            // Вывод в консоль
+            std::cout << shape << ": P=" << (int)perimeter << std::endl;
+        }
+    }
+
+    cv::imshow("Result", result);
+    cv::imwrite("result.jpg", result);
+
+    std::cout << "\nНажмите любую клавишу..." << std::endl;
+    cv::waitKey(0);
+    cv::destroyAllWindows();
+
+    return 0;
+}
