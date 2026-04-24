@@ -1,0 +1,114 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <vector>
+#include <string>
+
+int main()
+{
+    setlocale(LC_ALL, "Russian");
+
+    cv::VideoCapture cap("video.mkv");
+
+    if (!cap.isOpened())
+    {
+        std::cout << "Ошибка открытия видео!" << std::endl;
+        return -1;
+    }
+
+    double fps = cap.get(cv::CAP_PROP_FPS);
+    int width = (int)cap.get(cv::CAP_PROP_FRAME_WIDTH);
+    int height = (int)cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+
+    cv::VideoWriter writer("output_processed.mp4",
+        cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+        fps,
+        cv::Size(width, height));
+
+    if (!writer.isOpened())
+    {
+        writer.open("output_processed.avi",
+            cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
+            fps,
+            cv::Size(width, height));
+    }
+
+    cv::Mat frame, gray, edges;
+    int frameCount = 0;
+
+    while (cap.read(frame))
+    {
+        frameCount++;
+
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::Canny(gray, edges, 50, 100);
+
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        for (const auto& contour : contours)
+        {
+            double area = cv::contourArea(contour);
+            if (area < 500) continue;
+
+            std::vector<cv::Point> approx;
+            double perimeter = cv::arcLength(contour, true);
+            cv::approxPolyDP(contour, approx, 0.04 * perimeter, true);
+
+            std::string shape;
+            if (approx.size() == 3)
+            {
+                shape = "Triangle";
+            }
+            else if (approx.size() == 4)
+            {
+                shape = "Square";
+            }
+            else
+            {
+                double circularity = 4 * CV_PI * area / (perimeter * perimeter);
+                if (circularity > 0.75)
+                {
+                    shape = "Circle";
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            cv::Rect bbox = cv::boundingRect(contour);
+            cv::rectangle(frame, bbox, cv::Scalar(0, 0, 255), 2);
+
+            cv::Moments m = cv::moments(contour);
+            if (m.m00 != 0)
+            {
+                cv::Point center(m.m10 / m.m00, m.m01 / m.m00);
+                cv::circle(frame, center, 5, cv::Scalar(0, 255, 0), -1);
+                cv::putText(frame, shape, center,
+                    cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 0, 0), 2);
+            }
+        }
+
+        cv::putText(frame, "Frame: " + std::to_string(frameCount),
+            cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX,
+            0.7, cv::Scalar(255, 255, 255), 2);
+
+        if (writer.isOpened())
+        {
+            writer.write(frame);
+        }
+
+        cv::imshow("Shapes Detection", frame);
+
+        if (cv::waitKey(30) == 27) break;
+    }
+
+    cap.release();
+    writer.release();
+    cv::destroyAllWindows();
+
+    std::cout << "Обработано кадров: " << frameCount << std::endl;
+    std::cout << "Готово!" << std::endl;
+
+    return 0;
+}
