@@ -1,0 +1,58 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace cv;
+using namespace std;
+
+int main() {
+
+    Mat img = imread("C:/Users/User/source/repos/RZO/RZO/photo_2026-03-03_11-11-02.jpg");    if (img.empty()) {
+        cout << "Error: Could not load image!" << endl;
+        return -1;
+    }
+
+    // Способ 1: HSV 
+    Mat hsv;
+    cvtColor(img, hsv, COLOR_BGR2HSV);
+
+    // Диапазон для зелёного цвета в HSV
+    // H: 40-80 (зеленый), S: 50-255 (насыщенность), V: 50-255 (яркость)
+    Scalar lower_green(40, 50, 50);
+    Scalar upper_green(80, 255, 255);
+
+    Mat mask_green;
+    inRange(hsv, lower_green, upper_green, mask_green);
+
+    // Результаты
+    imshow("Original", img);
+    imshow("Green Mask (HSV)", mask_green);
+
+    // Способ 2: LAB 
+    Mat lab;
+    cvtColor(img, lab, COLOR_BGR2Lab);
+
+    vector<Mat> lab_channels;
+    split(lab, lab_channels);
+
+
+    Mat mask_a;
+    threshold(lab_channels[1], mask_a, 100, 255, THRESH_BINARY_INV);
+
+    imshow("Green Mask (LAB channel a)", mask_a);
+
+    // Находим контуры на маске
+    vector<vector<Point>> contours;
+    findContours(mask_green, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    cout << "Found " << contours.size() << " green marker(s)!" << endl;
+
+    // Рисуем контуры на оригинальном изображении
+    Mat result = img.clone();
+    drawContours(result, contours, -1, Scalar(0, 0, 255), 2);
+    imshow("Detected Green Markers", result);
+
+    waitKey(0);
+    destroyAllWindows();
+
+    return 0;
+}
