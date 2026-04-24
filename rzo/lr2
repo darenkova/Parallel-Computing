@@ -1,0 +1,56 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+int main()
+{
+    setlocale(LC_ALL, "Rus");
+
+    // Создаем пустое изображение (холст) 800x600, цвет черный
+    cv::Mat canvas(600, 800, CV_8UC3, cv::Scalar(0, 0, 0));
+
+    // Рисуем ЛИНИЮ (жёлтую) от левого верхнего до правого нижнего угла
+    cv::line(canvas, cv::Point(0, 0), cv::Point(799, 599), cv::Scalar(0, 200, 200), 3);
+
+    // Рисуем ПРЯМОУГОЛЬНИК (зеленый)
+    cv::rectangle(canvas, cv::Point(100, 100), cv::Point(300, 250), cv::Scalar(0, 300, 0), 2);
+
+    // Рисуем ОКРУЖНОСТЬ (фиолетовую, закрашенную)
+    cv::circle(canvas, cv::Point(400, 300), 100, cv::Scalar(200, 0, 200), -1);
+
+    // Рисуем ЭЛЛИПС (голубой)
+    cv::ellipse(canvas, cv::Point(400, 300), cv::Size(150, 70), 30, 0, 360, cv::Scalar(255, 255, 0), 2);
+
+    // Рисуем МНОГОУГОЛЬНИК (зелёный)
+    std::vector<cv::Point> pts;
+    pts.push_back(cv::Point(500, 100));
+    pts.push_back(cv::Point(600, 150));
+    pts.push_back(cv::Point(650, 250));
+    pts.push_back(cv::Point(550, 300));
+    pts.push_back(cv::Point(450, 200));
+
+    cv::polylines(canvas, pts, true, cv::Scalar(0, 128, 0), 2);
+
+
+    
+    //Движение текста
+    std::cout << "Sluchainoe peremeshchenie..." << std::endl;
+    for (int i = 0; i < 30; i++)
+    {
+        cv::Mat frame = canvas.clone();
+        int x = rand() % 700 + 20;  // Случайный X от 20 до 720
+        int y = rand() % 500 + 50;  // Случайный Y от 50 до 550
+
+        cv::putText(frame, "Danil KOLBASENKO",
+            cv::Point(x, y),
+            cv::FONT_HERSHEY_SIMPLEX,
+            1.0,
+            cv::Scalar(255, 255, 255), // Голубой цвет
+            2);
+
+        cv::imshow("Drawing Animation", frame);
+        if (cv::waitKey(500) == 27) break; // 500 мс задержка
+    }
+
+
+    return 0;
+}
