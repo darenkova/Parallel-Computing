@@ -1,0 +1,86 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+int main() {
+    cv::CascadeClassifier faceCascade, eyeCascade, smileCascade;
+
+    if (!faceCascade.load("haarcascade_frontalface_default.xml")) {
+        std::cerr << "Error loading face cascade\n";
+        return -1;
+    }
+    if (!eyeCascade.load("haarcascade_eye.xml")) {
+        std::cerr << "Error loading eye cascade\n";
+        return -1;
+    }
+    if (!smileCascade.load("haarcascade_smile.xml")) {
+        std::cerr << "Error loading smile cascade\n";
+        return -1;
+    }
+
+    cv::VideoCapture cap("ZUA.mp4");
+    if (!cap.isOpened()) {
+        std::cerr << "Error opening video file\n";
+        return -1;
+    }
+
+    cv::Mat frame, gray;
+
+    while (cap.read(frame)) {
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::equalizeHist(gray, gray);
+
+        std::vector<cv::Rect> faces;
+        faceCascade.detectMultiScale(
+            gray, faces,
+            1.1,
+            5,
+            0,
+            cv::Size(30, 30)
+        );
+
+        for (const auto& face : faces) {
+            cv::rectangle(frame, face, cv::Scalar(0, 255, 0), 2);
+
+            cv::Mat faceROI = gray(face);
+
+            std::vector<cv::Rect> eyes;
+            eyeCascade.detectMultiScale(
+                faceROI, eyes,
+                1.1, 8, 0, cv::Size(20, 20)
+            );
+
+            for (const auto& eye : eyes) {
+                cv::Point center(
+                    face.x + eye.x + eye.width / 2,
+                    face.y + eye.y + eye.height / 2
+                );
+                int radius = cvRound((eye.width + eye.height) * 0.25);
+                cv::circle(frame, center, radius, cv::Scalar(255, 0, 0), 2);
+            }
+
+            std::vector<cv::Rect> smiles;
+            smileCascade.detectMultiScale(
+                faceROI, smiles,
+                1.1, 10, 0, cv::Size(30, 30)
+            );
+
+            for (const auto& smile : smiles) {
+                cv::rectangle(
+                    frame,
+                    cv::Point(face.x + smile.x, face.y + smile.y),
+                    cv::Point(face.x + smile.x + smile.width, face.y + smile.y + smile.height),
+                    cv::Scalar(0, 0, 255),
+                    2
+                );
+            }
+        }
+
+        cv::imshow("Face/Eye/Smile Detection", frame);
+
+        if (cv::waitKey(1) == 27) break;
+    }
+
+    cap.release();
+    cv::destroyAllWindows();
+    return 0;
+}
